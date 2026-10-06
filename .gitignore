@@ -1,0 +1,8 @@
+# test artifacts
+.chrome-profile-test/
+shot_*.png
+debug.log
+
+# deps / os
+node_modules/
+.DS_Store
