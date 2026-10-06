@@ -241,13 +241,17 @@ function makeEngines(){
 let EN = { bd: null, w: null };
 const eng = () => EN[mode];
 
-/* name → possessive title, e.g. রাহিম → রাহিমের বাংলাদেশ */
+/* name → possessive title, e.g. রাহিম → রাহিমের বাংলাদেশ
+   "ের" is a conjunct — it needs a Bengali letter before it. Glued to Latin
+   letters it renders as overlapping garbage, so non-Bengali names get a
+   spaced "এর" instead: SOHAG → SOHAG এর বাংলাদেশ */
 function titleFromName(raw, m){
   const n = (raw || "").trim();
   const tail = m === "w" ? "বিশ্ব" : "বাংলাদেশ";
   if (!n) return "আমার " + tail;
   if (/র$/.test(n)) return n + " " + tail;
   if (/[অআইঈউঊএঐওৌািীুূেৈোৌ]$/.test(n)) return n + "র " + tail;
+  if (!/[ঀ-৿]$/.test(n)) return n + " এর " + tail;
   return n + "ের " + tail;
 }
 

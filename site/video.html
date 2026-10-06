@@ -78,6 +78,16 @@ video.out{outline:none}
     <div class="badgeRow"><span class="badge" id="progTime">০/১২ সেকেন্ড</span><span class="badge" id="progFmt"></span></div>
   </div>
 
+  <!-- nothing selected for this mode — never silently pick demo regions -->
+  <div class="progCard" id="emptyCard" style="display:none">
+    <div class="lbl" id="emptyLbl">কিছু বাছাই করা হয়নি</div>
+    <div class="sub" id="emptySub">ভিডিও বানাতে ম্যাপে ফিরে গিয়ে বাছাই করো।</div>
+    <div class="badgeRow" style="flex-wrap:wrap;gap:8px">
+      <button class="bigBtn green" id="emptyGo" type="button" style="flex:1;min-width:140px">🗺️ ম্যাপে ফিরে যাও</button>
+      <button class="bigBtn plain" id="emptyDemo" type="button" style="flex:1;min-width:140px">✨ উদাহরণ দিয়ে দেখাও</button>
+    </div>
+  </div>
+
   <!-- done -->
   <div class="shareBox" id="shareBox">
     <button class="bigBtn fb" id="fbBtn" type="button">ফেসবুকে শেয়ার করুন</button>
@@ -135,12 +145,14 @@ const qm = Q.get("mode");
 let mode = (qm === "world" || qm === "w") ? "w" : qm === "bd" ? "bd" : (cfg.mode === "w" ? "w" : "bd");
 const isBd = () => mode === "bd";
 
+/* "ের" is a conjunct — needs a Bengali letter before it; Latin names get spaced "এর" */
 function titleFromName(raw, m){
   const n = (raw || "").trim();
   const tail = m === "w" ? "বিশ্ব" : "বাংলাদেশ";
   if (!n) return "আমার " + tail;
   if (/র$/.test(n)) return n + " " + tail;
   if (/[অআইঈউঊএঐওৌািীুূেৈোৌ]$/.test(n)) return n + "র " + tail;
+  if (!/[ঀ-৿]$/.test(n)) return n + " এর " + tail;
   return n + "ের " + tail;
 }
 
@@ -152,8 +164,11 @@ if (isBd()){
   cfg.wsel = cfg.wsel.filter(n => WORLD.f.some(f => f.n === n));
   list = cfg.wsel;
 }
+/* No silent demo fallback: an empty mode (e.g. switching to "দেশ" after only picking
+   districts) must show an empty state, not auto-record regions the user never chose. */
 let usingDemo = false;
-if (!list.length){ list = [...(isBd() ? DEMO : DEMO_W)]; usingDemo = true; }
+const emptyPick = !list.length;
+if (emptyPick) list = [];
 
 const cv = document.getElementById("cv");
 const out = document.getElementById("out");
@@ -351,6 +366,31 @@ document.getElementById("modalClose").onclick = () => document.getElementById("m
   await MAP.fontsReady();
   engine.seek(engine.TL.dur);
   window.__READY = 1;
+
+  /* empty selection for this mode: offer "go back" or an explicit demo — never auto-record */
+  if (emptyPick){
+    document.getElementById("progCard").style.display = "none";
+    document.getElementById("shareBox").classList.remove("show");
+    document.getElementById("emptyCard").style.display = "";
+    cv.classList.remove("hidden"); out.classList.add("hidden");
+    document.getElementById("emptyLbl").textContent = isBd()
+      ? "কোনো জেলা বাছাই করা হয়নি"
+      : "কোনো দেশ বাছাই করা হয়নি";
+    document.getElementById("emptySub").textContent = isBd()
+      ? "ভিডিও বানাতে ম্যাপে ফিরে গিয়ে যেসব জেলায় গিয়েছ সেগুলো বাছাই করো।"
+      : "ভিডিও বানাতে ম্যাপে ফিরে গিয়ে যেসব দেশে গিয়েছ সেগুলো বাছাই করো।";
+    document.getElementById("emptyGo").onclick = () => { location.href = "index.html"; };
+    document.getElementById("emptyDemo").onclick = () => {
+      /* explicit demo: fill cfg so the normal record path runs, then reload clean */
+      if (isBd()) cfg.sel = [...DEMO]; else cfg.wsel = [...DEMO_W];
+      try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {}
+      const q = new URLSearchParams(location.search);
+      q.set("mode", isBd() ? "bd" : "world");
+      location.href = "video.html?" + q.toString();
+    };
+    return;
+  }
+
   const still = location.search.includes("still");
   if (still){
     document.getElementById("progCard").style.display = "none";

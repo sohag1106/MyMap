@@ -156,6 +156,24 @@ async function main() {
     if (!imgShare.shImg || !imgShare.shVid) throw new Error("home share buttons missing");
     if (imgShare.host !== "mymap.brightskyit.com") throw new Error("watermark host wrong: " + imgShare.host);
 
+    /* --- 1c2. Latin name must not glue the Bengali conjunct "ের" onto it --- */
+    const titles = await evalJs(ws, `(() => ({
+      latin: titleFromName('SOHAG', 'bd'),
+      latinW: titleFromName('SOHAG', 'w'),
+      bnCons: titleFromName('রাহিম', 'bd'),
+      bnVowel: titleFromName('রাজা', 'bd'),
+      endsRa: titleFromName('অমর', 'bd'),
+      empty: titleFromName('', 'bd'),
+    }))()`);
+    console.log("titleFromName:", JSON.stringify(titles));
+    if (titles.latin !== "SOHAG এর বাংলাদেশ") throw new Error("Latin name title wrong: " + titles.latin);
+    if (titles.latinW !== "SOHAG এর বিশ্ব") throw new Error("Latin world title wrong: " + titles.latinW);
+    if (titles.bnCons !== "রাহিমের বাংলাদেশ") throw new Error("Bengali consonant title wrong: " + titles.bnCons);
+    if (titles.bnVowel !== "রাজার বাংলাদেশ") throw new Error("Bengali vowel title wrong: " + titles.bnVowel);
+    if (titles.endsRa !== "অমর বাংলাদেশ") throw new Error("name-ending-in-র title wrong: " + titles.endsRa);
+    if (titles.empty !== "আমার বাংলাদেশ") throw new Error("empty-name title wrong: " + titles.empty);
+    if (/ের/.test(titles.latin) || /ের/.test(titles.latinW)) throw new Error("conjunct এর leaked into Latin title");
+
     /* --- 1d. mobile: a touch that starts on the map must scroll the page, and a tap
        on the uploaded photo thumbnail must open the file picker --- */
     await ws("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
@@ -329,9 +347,18 @@ async function main() {
     if (!rec || rec.none || rec.size < 100000) throw new Error("recorded blob missing or too small");
 
     /* --- 4. video.html world mode: caption + real recording --- */
+    /* seed a world selection: an empty mode now shows the empty state, not a demo */
     await ws("Page.navigate", { url: BASE + "/video.html?mode=world" });
     await sleep(400);
     if (!(await waitReady(ws))) throw new Error("video.html?mode=world never became ready");
+    /* if the empty state appeared (cfg.wsel was cleared), take the explicit demo path */
+    const emptyShown = await evalJs(ws, "document.getElementById('emptyCard').style.display !== 'none'");
+    if (emptyShown) {
+      console.log("world mode empty (cfg.wsel cleared) — using explicit demo button");
+      await evalJs(ws, "document.getElementById('emptyDemo').click(); 'ok'");
+      await sleep(600);
+      if (!(await waitReady(ws))) throw new Error("video.html?mode=world after demo never became ready");
+    }
     const modeOn = await evalJs(ws, "document.getElementById('mW').classList.contains('on') + '|' + document.getElementById('mBd').classList.contains('on')");
     console.log("world video recording... (up to 45s) | mode switch:", modeOn);
     if (modeOn !== "true|false") throw new Error("world mode switch wrong: " + modeOn);
@@ -360,6 +387,57 @@ async function main() {
     console.log("world caption first line:", capW.split("\n")[0], "| record:", JSON.stringify(recW));
     if (!capW.includes("পৃথিবী") || !capW.includes("#আমারবিশ্বভ্রমণ")) throw new Error("world caption wrong: " + capW.split("\n")[0]);
     if (!recW || recW.none || recW.size < 100000) throw new Error("world recorded blob missing or too small");
+
+    /* --- 5. empty world mode: districts exist but no countries — must NOT auto-pick demo ---
+       the reported bug: after a BD video, switching to the country tab silently
+       selected India/Nepal/... and recorded them. Now it must show the empty state. */
+    await evalJs(ws, `(() => {
+      const c = JSON.parse(localStorage.getItem('mb_cfg') || '{}');
+      c.sel = c.sel || ['Dhaka','Cumilla','Sylhet'];
+      c.wsel = [];                          /* user never picked countries */
+      localStorage.setItem('mb_cfg', JSON.stringify(c));
+      return 'ok';
+    })()`);
+    await ws("Page.navigate", { url: BASE + "/video.html?mode=world" });
+    await sleep(400);
+    if (!(await waitReady(ws))) throw new Error("video.html?mode=world (empty) never became ready");
+    await sleep(800);                       /* give auto-record a chance to (wrongly) start */
+    const emptyState = await evalJs(ws, `(() => ({
+      emptyShown: document.getElementById('emptyCard').style.display !== 'none',
+      lbl: document.getElementById('emptyLbl').textContent,
+      progHidden: document.getElementById('progCard').style.display === 'none',
+      shareHidden: !document.getElementById('shareBox').classList.contains('show'),
+      sel: (JSON.parse(localStorage.getItem('mb_cfg')||'{}').wsel || []).length,
+      hasDemoCountries: ['India','Nepal','France'].some(n =>
+        (JSON.parse(localStorage.getItem('mb_cfg')||'{}').wsel || []).includes(n)),
+    }))()`);
+    await shot(ws, "C:/MyMap/shot_video_empty.png");
+    console.log("empty world mode:", JSON.stringify(emptyState));
+    if (!emptyState.emptyShown) throw new Error("empty world mode did not show the empty state");
+    if (!emptyState.lbl.includes("দেশ")) throw new Error("empty-state label wrong: " + emptyState.lbl);
+    if (!emptyState.progHidden) throw new Error("recording progress still visible in empty mode");
+    if (!emptyState.shareHidden) throw new Error("share panel shown without a recording");
+    if (emptyState.hasDemoCountries) throw new Error("demo countries were auto-selected into cfg.wsel");
+
+    /* explicit demo button must fill the selection and start the normal record path */
+    await evalJs(ws, "document.getElementById('emptyDemo').click(); 'ok'");
+    let afterDemo = null;
+    for (let i = 0; i < 40; i++) {
+      await sleep(250);
+      afterDemo = await evalJs(ws, `(() => {
+        if (window.__READY !== 1) return null;           /* still reloading */
+        return {
+          emptyGone: document.getElementById('emptyCard').style.display === 'none',
+          wsel: (JSON.parse(localStorage.getItem('mb_cfg')||'{}').wsel || []).length,
+          recStarted: document.getElementById('progLbl').textContent.includes('তৈরি হচ্ছে') ||
+                      document.getElementById('shareBox').classList.contains('show'),
+        };
+      })()`);
+      if (afterDemo && afterDemo.emptyGone && afterDemo.wsel >= 10) break;
+    }
+    console.log("after emptyDemo:", JSON.stringify(afterDemo));
+    if (!afterDemo || !afterDemo.emptyGone) throw new Error("empty state still shown after explicit demo");
+    if (afterDemo.wsel < 10) throw new Error("demo button did not persist world selection: " + afterDemo.wsel);
 
     if (errors.length) {
       console.log("PAGE ERRORS:\n" + errors.join("\n"));
