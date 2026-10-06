@@ -1,6 +1,7 @@
 # test artifacts
 .chrome-profile-*/
 shot_*.png
+/tmp*.html
 debug.log
 
 # deps / os

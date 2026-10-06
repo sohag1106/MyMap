@@ -8,6 +8,8 @@
 <meta property="og:title" content="আমার বাংলাদেশ — ভিডিও ম্যাপ">
 <meta property="og:description" content="তোমার ঘুরা জেলাগুলো দিয়ে অ্যানিমেটেড ভিডিও ম্যাপ বানান।">
 <!-- Deploy-এর পর এখানে absolute URL দিয়ে og:image যোগ করো (FB-তে লিংক প্রিভিউয়ের জন্য) -->
+<meta property="og:image" content="https://mymap.brightskyit.com/profile.jpg">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='13' fill='%23f42a41'/></svg>">
 <link rel="stylesheet" href="fonts.css">
 <style>
 :root{--bg:#f6f2ea;--ink:#17201c;--muted:#7a7f78;--brand:#0f6b4f;--brand2:#1f9a70;--line:#e7e1d4;--dot:#f42a41}
@@ -19,11 +21,16 @@ body{min-height:100vh;display:flex;flex-direction:column;align-items:center;padd
 .topbar span{font-size:13px;color:var(--muted);font-weight:500}
 .poster{width:min(520px,100%);padding:0 10px}
 canvas{width:100%;height:auto;display:block;border-radius:16px;box-shadow:0 10px 40px rgba(23,32,28,.16);background:var(--bg);touch-action:none}
+.posterAct{display:flex;gap:8px;margin-top:10px}
+.posterAct button{flex:1;border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 8px;font:600 14px "Anek Bangla",sans-serif;color:var(--ink);cursor:pointer}
+.posterAct button.pri{background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:var(--brand);color:#fff}
 .card{width:min(520px,100%);margin:14px 10px 0;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 14px 16px}
 .card h2{margin:0 0 10px;font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .photoBtn{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px dashed #cfc7b4;border-radius:12px;padding:8px 12px;font:600 14px "Anek Bangla",sans-serif;color:var(--ink);cursor:pointer}
 .photoBtn .thumb{width:40px;height:40px;border-radius:10px;object-fit:cover;background:#ddd;border:2px solid var(--brand)}
+.photoBtn .ph{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:var(--bg);border:2px dashed var(--brand);font-size:19px}
+.photoBtn .ph[hidden]{display:none}
 input[type=text]{flex:1;min-width:160px;font:500 15px "Anek Bangla",sans-serif;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);outline:none}
 input[type=text]:focus{border-color:var(--brand)}
 /* mode tabs */
@@ -63,6 +70,16 @@ input[type=text]:focus{border-color:var(--brand)}
 .badge{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font:700 13px "Anek Bangla",sans-serif;color:var(--brand)}
 .hidden{display:none}
 footer.site{margin:22px 10px 8px;font-size:12.5px;color:var(--muted);text-align:center}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#17201c;color:#fff;font:600 14px "Anek Bangla",sans-serif;padding:11px 18px;border-radius:99px;opacity:0;pointer-events:none;transition:.25s;z-index:40;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.modal{position:fixed;inset:0;background:rgba(15,20,18,.55);display:none;align-items:flex-end;justify-content:center;z-index:50}
+.modal.show{display:flex}
+.sheet{background:#fff;width:min(520px,100%);border-radius:20px 20px 0 0;padding:20px 18px calc(24px + env(safe-area-inset-bottom));max-height:86vh;overflow:auto}
+.sheet h2{margin:0 0 4px;font-size:18px}
+.sheet ol{padding-left:22px;margin:12px 0}
+.sheet li{margin:8px 0;font-size:15px}
+.sheet .close{width:100%;margin-top:8px;border:0;border-radius:12px;background:var(--brand);color:#fff;font:700 15px "Anek Bangla",sans-serif;padding:14px;cursor:pointer}
+img.thumb[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -71,14 +88,21 @@ footer.site{margin:22px 10px 8px;font-size:12.5px;color:var(--muted);text-align:
   <span>ভিডিও ম্যাপ বানাও · ফেসবুকে শেয়ার করো</span>
 </div>
 
-<div class="poster"><canvas id="cv" width="1200" height="1600"></canvas></div>
+<div class="poster">
+  <canvas id="cv" width="1200" height="1600"></canvas>
+  <div class="posterAct">
+    <button class="pri" id="shImg" type="button">🖼 ছবি শেয়ার করো</button>
+    <button id="shVid" type="button">🎬 ভিডিও শেয়ার করো</button>
+  </div>
+</div>
 
 <div class="card">
   <h2>তোমার পরিচয়</h2>
   <div class="row">
     <button class="photoBtn" id="photoBtn" type="button">
-      <img class="thumb" id="thumb" alt="" src="profile.jpg">
-      <span>ছবি বদলাও</span>
+      <img class="thumb" id="thumb" alt="" hidden>
+      <span class="ph" id="thumbPh">📷</span>
+      <span id="photoLbl">📷 ছবি যোগ করো (ঐচ্ছিক)</span>
     </button>
     <input type="text" id="nameIn" maxlength="24" placeholder="নাম (ঐচ্ছিক) — যেমন: রাহিম">
   </div>
@@ -128,10 +152,11 @@ footer.site{margin:22px 10px 8px;font-size:12.5px;color:var(--muted);text-align:
     <button id="wAll" type="button">সব বাছাই করুন</button>
     <button id="wNone" class="danger" type="button">সব মুছুন</button>
   </div>
-  <div class="chips" id="wChips" style="max-height:420px;overflow:auto;padding-top:4px"></div>
+  <div id="wGroups"></div>
   <div class="row" style="margin-top:12px">
     <button class="ghost" id="demoWBtn" type="button">✨ উদাহরণ (১৪টি দেশ)</button>
   </div>
+  <div id="wGroups"></div>
   <p class="hint">মানচিত্রে <b>দেশে ক্লিক/ট্যাপ</b> করেও বাছাই করা যায় — ঠিক জেলার মতোই।</p>
 </div>
 
@@ -139,7 +164,7 @@ footer.site{margin:22px 10px 8px;font-size:12.5px;color:var(--muted);text-align:
   কীভাবে কাজ করে:
   <ol>
     <li>জেলা বা দেশ সিলেক্ট করো, ছবি দাও</li>
-    <li><b>ভিডিও তৈরি করুন</b> — ১২ সেকেন্ডে ম্যাপ জুড়ে তৈরি হবে</li>
+    <li><b>ছবি শেয়ার করো</b> — সাথে সাথে তৈরি পোস্টার, অথবা <b>ভিডিও শেয়ার করো</b> — ১২ সেকেন্ডে ম্যাপ জুড়ে তৈরি হবে</li>
     <li>এক ট্যাপে ফেসবুকে পোস্ট করো 🎬</li>
   </ol>
 </div>
@@ -149,6 +174,21 @@ footer.site{margin:22px 10px 8px;font-size:12.5px;color:var(--muted);text-align:
 </div>
 
 <footer class="site">তোমার ভ্রমণ, তোমার গল্প · সবকিছু তোমার ব্রাউজারেই তৈরি হয়</footer>
+
+<div class="modal" id="modal">
+  <div class="sheet">
+    <h2>এবার ফেসবুকে পোস্ট করো</h2>
+    <div style="font-size:14px;color:var(--muted)">ফাইলটি ডাউনলোড হয়ে গেছে, ক্যাপশনও কপি হয়ে গেছে। ৩টি ধাপ:</div>
+    <ol>
+      <li>ফেসবুকে <b>What's on your mind?</b> লেখায় ক্লিক করো</li>
+      <li>📎 আইকন থেকে <b>ছবি/ভিডিও</b> ফাইলটি বেছে নাও (ডাউনলোড ফোল্ডারে আছে)</li>
+      <li>ক্যাপশন পেস্ট করো → <b>পোস্ট</b> চাপো ✅</li>
+    </ol>
+    <button class="close" id="modalClose">বুঝেছি ✓</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
 
 <script src="bd_data.js"></script>
 <script src="world_data.js"></script>
@@ -168,6 +208,9 @@ const DIVS = ["Dhaka","Chattogram","Sylhet","Rajshahi","Khulna","Barishal","Rang
 const DV_BN = {Dhaka:"ঢাকা",Chattogram:"চট্টগ্রাম",Sylhet:"সিলেট",Rajshahi:"রাজশাহী",
   Khulna:"খুলনা",Barishal:"বরিশাল",Rangpur:"রংপুর",Mymensingh:"ময়মনসিংহ"};
 const SEL = DIVS.reduce((o,d) => (o[d] = DATA.f.filter(f => f.dv === d).map(f => f.n), o), {});
+/* continent order for the country picker (smallest last) */
+const CONT_ORDER = ["এশিয়া","ইউরোপ","আফ্রিকা","উত্তর আমেরিকা","দক্ষিণ আমেরিকা","ওশেনিয়া"];
+const SEL_W = CONT_ORDER.reduce((o,c) => (o[c] = WORLD.f.filter(f => f.ct === c).map(f => f.n), o), {});
 
 function loadCfg(){
   try { const c = JSON.parse(localStorage.getItem(KEY)); if (c && Array.isArray(c.sel)) return c; } catch (e) {}
@@ -207,14 +250,24 @@ function titleFromName(raw, m){
   return n + "ের " + tail;
 }
 
-/* photo */
+/* photo (optional — nothing personal is pre-loaded) */
 const photoImg = new Image();
+let photoSet = false, photoReady = false;
 function applyPhoto(src){
-  const set = () => { if (EN.bd) EN.bd.setPhoto(photoImg); if (EN.w) EN.w.setPhoto(photoImg); refresh(); };
-  photoImg.onload = set;
-  photoImg.onerror = set;
+  photoReady = false;
+  photoImg.onload = () => { photoReady = true; syncPhoto(); refresh(); };
+  photoImg.onerror = () => { photoReady = false; syncPhoto(); refresh(); };
   photoImg.src = src || "profile.jpg";
 }
+function syncPhoto(){
+  if (EN.bd) EN.bd.setPhoto(photoReady ? photoImg : null);
+  if (EN.w) EN.w.setPhoto(photoReady ? photoImg : null);
+}
+
+/* the poster canvas keeps its native 1200x1600 (the engine's coordinate space) and is
+   displayed at ~500 CSS px, so it is already ~2.4x device pixels on a phone. */
+document.getElementById("cv").width = MAP.W;
+document.getElementById("cv").height = MAP.H;
 
 function refresh(){
   const e = eng();
@@ -243,10 +296,12 @@ function refresh(){
   });
   document.querySelectorAll(".grp").forEach(g => {
     const head = g.querySelector(".gt");
-    if (head && head.dataset.dv){
-      const dv = head.dataset.dv;
-      head.innerHTML = `${DV_BN[dv]} বিভাগ <small>${MAP.bn(cfg.sel.filter(n => SEL[dv].includes(n)).length)}/${MAP.bn(SEL[dv].length)}</small>`;
-    }
+    if (!head || !head.dataset.dv) return;
+    const dv = head.dataset.dv;
+    const list = SEL[dv] ? SEL[dv] : SEL_W[dv];
+    if (!list) return;
+    const mine = g.dataset.kind === "w" ? cfg.wsel : cfg.sel;
+    head.innerHTML = `${dv}${g.dataset.kind === "w" ? "" : " বিভাগ"} <small>${MAP.bn(list.filter(n => mine.includes(n)).length)}/${MAP.bn(list.length)}</small>`;
   });
   saveCfg();
 }
@@ -310,19 +365,39 @@ DIVS.forEach(d => {
   groupsBox.appendChild(g);
 });
 
-/* ---------- build country chips ---------- */
-const wBox = document.getElementById("wChips");
-[...WORLD.f].sort((a, b) => (WORLD_BN[a.n] || a.n).localeCompare(WORLD_BN[b.n] || b.n, "bn"))
- .forEach(f => {
-  const c = document.createElement("button");
-  c.className = "chip"; c.type = "button"; c.dataset.en = f.n; c.dataset.bn = WORLD_BN[f.n] || f.n;
-  c.innerHTML = `<span class="tick">✓</span>${c.dataset.bn}`;
-  c.onclick = () => {
-    const i = cfg.wsel.indexOf(f.n);
-    if (i >= 0) cfg.wsel.splice(i, 1); else cfg.wsel.push(f.n);
+/* ---------- build country groups (by continent) ---------- */
+const wBox = document.getElementById("wGroups");
+const bnSort = (m) => (a, b) => (m[a.n] || a.n).localeCompare(m[b.n] || b.n, "bn");
+CONT_ORDER.forEach(ct => {
+  const g = document.createElement("div");
+  g.className = "grp"; g.dataset.kind = "w";
+  const head = document.createElement("div");
+  head.className = "grpHead";
+  head.innerHTML = `<span class="gt" data-dv="${ct}"></span><button type="button" data-selall="${ct}">সব বাছাই</button>`;
+  const chips = document.createElement("div");
+  chips.className = "chips";
+  WORLD.f.filter(f => f.ct === ct).sort(bnSort(WORLD_BN)).forEach(f => {
+    const c = document.createElement("button");
+    c.className = "chip"; c.type = "button"; c.dataset.en = f.n;
+    c.innerHTML = `<span class="tick">✓</span>${WORLD_BN[f.n] || f.n}`;
+    c.onclick = () => {
+      const i = cfg.wsel.indexOf(f.n);
+      if (i >= 0) cfg.wsel.splice(i, 1); else cfg.wsel.push(f.n);
+      refresh();
+    };
+    chips.appendChild(c);
+  });
+  head.querySelector("[data-selall]").onclick = () => {
+    const list = SEL_W[ct];
+    const all = list.every(n => cfg.wsel.includes(n));
+    for (const n of list){
+      const i = cfg.wsel.indexOf(n);
+      if (all){ if (i >= 0) cfg.wsel.splice(i, 1); } else if (i < 0) cfg.wsel.push(n);
+    }
     refresh();
   };
-  wBox.appendChild(c);
+  g.appendChild(head); g.appendChild(chips);
+  wBox.appendChild(g);
 });
 
 /* ---------- search filters ---------- */
@@ -333,7 +408,7 @@ function wireSearch(inputId, root){
       const txt = ch.textContent.toLowerCase();
       ch.classList.toggle("hidden", q && !txt.includes(q));
     });
-    if (root === groupsBox){
+    if (root === groupsBox || root === wBox){
       root.querySelectorAll(".grp").forEach(g => {
         const any = [...g.querySelectorAll(".chip")].some(c => !c.classList.contains("hidden"));
         g.classList.toggle("hidden", !any);
@@ -374,7 +449,7 @@ document.getElementById("photoIn").onchange = e => {
   if (!file) return;
   const img = new Image();
   img.onload = () => {
-    const S = 512;
+    const S = 720;
     const k = Math.min(S / img.width, S / img.height, 1);
     const c2 = document.createElement("canvas");
     c2.width = Math.round(img.width * k); c2.height = Math.round(img.height * k);
@@ -387,7 +462,67 @@ document.getElementById("photoIn").onchange = e => {
   };
   img.src = URL.createObjectURL(file);
 };
-if (cfg.photo) document.getElementById("thumb").src = cfg.photo;
+function syncPhotoBtn(){
+  const src = cfg.photo || (photoSet ? "profile.jpg" : "");
+  const th = document.getElementById("thumb");
+  th.hidden = !src;
+  if (src) th.src = src;
+  document.getElementById("thumbPh").hidden = !!src;
+  document.getElementById("photoLbl").textContent = src ? "ছবি বদলাও" : "📷 ছবি যোগ করো (ঐচ্ছিক)";
+}
+if (cfg.photo){ photoSet = true; applyPhoto(cfg.photo); }
+syncPhotoBtn();
+
+/* ---------- share straight from the home page (image or video) ---------- */
+const capFile = st => (mode === "bd"
+  ? `amar-bangladesh-${st.landed}-jela`
+  : `amar-bishwo-bhromon-${st.landed}-desh`);
+function homeCaption(){
+  const st = eng().stateAt(eng().TL.dur);
+  const url = location.origin + location.pathname.replace(/\/index\.html$/, "/");
+  let c = mode === "bd"
+    ? `বাংলাদেশ কতটুকু ঘুরেছ তুমি? 🇧🇩\nআমার ভ্রমণ ম্যাপে আছে ${MAP.bn(st.landed)}/${MAP.bn(64)} জেলা (${MAP.bn(st.pct)}% দেশ)।\n`
+    : `পৃথিবীর কতটুকু দেশ ঘুরেছ তুমি? 🌍\nআমার ভ্রমণ ম্যাপে আছে ${MAP.bn(st.landed)}/${MAP.bn(WORLD.f.length)} দেশ (${MAP.bn(st.pct)}% পৃথিবী)।\n`;
+  c += `তোমার নিজের ম্যাপ বানাতে 👉 ${MAP.SITE.host}\n`;
+  c += mode === "bd" ? "#আমারবাংলাদেশ #BangladeshTravel" : "#আমারবিশ্বভ্রমণ #WorldTravel";
+  return c;
+}
+function toastHome(msg){
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove("show"), 3000);
+}
+function homeDownload(data, name, type){
+  const b = data instanceof Blob ? data : new Blob([data], { type });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(b); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+}
+function posterBlob(){
+  return new Promise(res => { eng().seek(eng().TL.dur); cv.toBlob(res, "image/png"); });
+}
+async function shareFile(file, caption, title){
+  const canFile = navigator.canShare && navigator.canShare({ files: [file] });
+  if (canFile){
+    try { await navigator.share({ files: [file], text: caption, title }); return true; }
+    catch (e){ if (e && (e.name === "AbortError" || e.name === "NotAllowedError")) return true; }
+  }
+  homeDownload(file, file.name, file.type);
+  try { await navigator.clipboard.writeText(caption); } catch (e) {}
+  window.open("https://www.facebook.com/", "_blank", "noopener");
+  document.getElementById("modal").classList.add("show");
+  return false;
+}
+document.getElementById("shImg").onclick = async () => {
+  const b = await posterBlob();
+  if (!b) { toastHome("⚠ ছবি তৈরি হয়নি"); return; }
+  const f = new File([b], capFile(eng().stateAt(eng().TL.dur)) + ".png", { type: "image/png" });
+  toastHome(navigator.canShare && navigator.canShare({ files: [f] }) ? "🖼 শেয়ার শিট খুলছে..." : "⬇ ছবি নামছে + ক্যাপশন কপি হচ্ছে...");
+  await shareFile(f, homeCaption(), "আমার ভ্রমণ ম্যাপ");
+};
+document.getElementById("shVid").onclick = () => { location.href = "video.html"; };
+document.getElementById("modalClose").onclick = () => document.getElementById("modal").classList.remove("show");
 
 document.getElementById("goBtn").onclick = () => { location.href = "video.html"; };
 
@@ -395,7 +530,7 @@ document.getElementById("goBtn").onclick = () => { location.href = "video.html";
 (async () => {
   await MAP.fontsReady();
   EN = makeEngines();
-  applyPhoto(cfg.photo || "");
+  syncPhoto();
   setMode(mode);
   window.__READY = 1;
 })();

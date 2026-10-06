@@ -183,19 +183,18 @@ document.getElementById("mW").onclick = () => switchMode("w");
 
 const photoImg = new Image();
 function applyPhoto(src){
-  const set = () => { engine.setPhoto(photoImg); engine.seek(engine.TL.dur); };
-  photoImg.onload = set; photoImg.onerror = set;
+  let ready = false;
+  const set = () => { engine.setPhoto(ready ? photoImg : null); engine.seek(engine.TL.dur); };
+  photoImg.onload = () => { ready = true; set(); };
+  photoImg.onerror = () => { ready = false; set(); };
   photoImg.src = src || "profile.jpg";
 }
-applyPhoto(cfg.photo);
+if (cfg.photo) applyPhoto(cfg.photo); else engine.setPhoto(null);
 
 let blob = null, ext = "mp4";
 const st0 = engine.stateAt(engine.TL.dur);
 
 function getCaption(){
-  /* works both locally (/video.html) and on the host (/video after 307) */
-  const url = /^https?:$/.test(location.protocol)
-    ? location.origin + location.pathname.replace(/\/video(\.html)?$/, "/index.html") : "";
   let c;
   if (isBd()){
     c = `বাংলাদেশ কতটুকু ঘুরেছ তুমি? 🇧🇩\n`;
@@ -204,7 +203,7 @@ function getCaption(){
     c = `পৃথিবীর কতটুকু দেশ ঘুরেছ তুমি? 🌍\n`;
     c += `আমার ভ্রমণ ম্যাপে আছে ${MAP.bn(st0.landed)}/${MAP.bn(st0.denom)} দেশ (${MAP.bn(st0.pct)}% পৃথিবী) — ভিডিওতে দেখালাম কীভাবে একের পর এক জুড়ে উঠল!\n`;
   }
-  if (url) c += `তোমার নিজের ম্যাপ বানাতে 👉 ${url}\n`;
+  c += `তোমার নিজের ম্যাপ বানাতে 👉 ${MAP.SITE.host}\n`;
   c += isBd() ? `#আমারবাংলাদেশ #BangladeshTravel` : `#আমারবিশ্বভ্রমণ #WorldTravel`;
   return c;
 }

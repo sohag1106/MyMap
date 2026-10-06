@@ -4,12 +4,16 @@
    fonts.css linked. build() accepts {selected, title, data, bn, sub, footL, footR}. */
 const MAP = (() => {
 const W = 1200, H = 1600, FPS = 30;
+const SITE = { host:"mymap.brightskyit.com", label:"নিজের ম্যাপ বানাও" };
 const T = { bg:"#f6f2ea", land:"#e3dccd", stroke:"#f6f2ea", v1:"#0f6b4f", v2:"#1f9a70", vStroke:"#f6f2ea",
             ink:"#17201c", muted:"#7a7f78", label:"#ffffff", halo:"#0b3d2e", dot:"#f42a41", track:"#e3dccd" };
 const FONT = '"Anek Bangla",system-ui,sans-serif';
 
+/* map slot inside the 1200x1600 poster */
+const SLOT = { x:40, y:250, w:1120, h:1040 };
+
 const TL = { photo:[.15,.75], sub:[.35,.95], title:[.45,1.05], cnt:[.6,1.15], map:[.9,1.65],
-             foot:[1.55,2.1], start:1.7, stag:.28, piece:.38, lag:.10, label:.28,
+             foot:[1.55,2.1], start:1.7, stag:.28, piece:.38, lag:.10, label:.28, brand:[1.15,1.7],
              settle:[9.4,10.3], dur:12 };
 
 const clamp=(v,a=0,b=1)=>v<a?a:v>b?b:v;
@@ -22,10 +26,27 @@ function alignX(ctx,text,x,align){const w=ctx.measureText(text).width;return ali
 function textAt(ctx,text,x,y,align,stroke){const ax=alignX(ctx,text,x,align);if(stroke)ctx.strokeText(text,ax,y);ctx.fillText(text,ax,y);}
 function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
 
-/* per-dataset context: geometry scale + feature index */
+/* per-dataset context: geometry scale + feature index.
+   Scale is fitted to the real ink bounds (not the declared canvas), so datasets with
+   padding around the shapes — the Mercator world map has 350px of empty ocean below
+   the last country — still fill the slot instead of floating in it. */
 function makeDS(data, bnMap){
-  const GEO = { y:250, h:1040 };
-  GEO.s = GEO.h / data.h; GEO.w = data.w * GEO.s; GEO.x = (W - GEO.w) / 2;
+  const { x, y, w, h } = SLOT;
+  const pad = 4;                                    // room for the piece stroke
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const f of data.f){
+    const nums = f.d.match(/-?\d+(?:\.\d+)?/g) || [];
+    for (let i = 0; i + 1 < nums.length; i += 2){
+      const px = +nums[i], py = +nums[i+1];
+      if (px < x0) x0 = px; if (px > x1) x1 = px;
+      if (py < y0) y0 = py; if (py > y1) y1 = py;
+    }
+  }
+  if (!isFinite(x0)) { x0 = 0; y0 = 0; x1 = data.w; y1 = data.h; }
+  const s = Math.min((w - 2*pad) / (x1 - x0), (h - 2*pad) / (y1 - y0));
+  const GEO = { s, w:(x1-x0)*s, h:(y1-y0)*s, ox:x0, oy:y0 };
+  GEO.x = x + (w - GEO.w) / 2;
+  GEO.y = y + (h - GEO.h) / 2;
   const F_BY = Object.fromEntries(data.f.map(f => [f.n, f]));
   const missing = n => !F_BY[n];
   return { data, bn: bnMap || {}, GEO, F_BY, missing };
@@ -172,7 +193,8 @@ function build(canvas, opts){
     const cx = DS.GEO.x + DS.GEO.w/2, cy = DS.GEO.y + DS.GEO.h/2;
     const s = .985 + .015*a;
     ctx.translate(cx, cy); ctx.scale(s, s); ctx.translate(-cx, -cy);
-    ctx.translate(DS.GEO.x, DS.GEO.y); ctx.scale(DS.GEO.s, DS.GEO.s);
+    ctx.translate(DS.GEO.x - DS.GEO.ox*DS.GEO.s, DS.GEO.y - DS.GEO.oy*DS.GEO.s);
+    ctx.scale(DS.GEO.s, DS.GEO.s);
     ctx.lineJoin = "round";
     for (const f of DS.data.f){
       const p = new Path2D(f.d);
@@ -206,7 +228,8 @@ function build(canvas, opts){
 
   function drawPieces(t){
     ctx.save();
-    ctx.translate(DS.GEO.x, DS.GEO.y); ctx.scale(DS.GEO.s, DS.GEO.s);
+    ctx.translate(DS.GEO.x - DS.GEO.ox*DS.GEO.s, DS.GEO.y - DS.GEO.oy*DS.GEO.s);
+    ctx.scale(DS.GEO.s, DS.GEO.s);
     ctx.lineJoin = "round";
     const vg = ctx.createLinearGradient(0, 0, DS.data.w, DS.data.h);
     vg.addColorStop(0, T.v1); vg.addColorStop(1, T.v2);
@@ -226,6 +249,36 @@ function build(canvas, opts){
       if (p < .65){ ctx.save(); ctx.globalAlpha = (1-p/.65)*.9; ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 4/DS.GEO.s; ctx.stroke(path); ctx.restore(); }
       ctx.strokeStyle = T.vStroke; ctx.lineWidth = 1.4/DS.GEO.s; ctx.stroke(path);
       ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  /* site watermark — sits in the empty band under the chart so every poster and video
+   carries the website name and people can come make their own */
+  function drawBrand(t){
+    const a = easeOutCubic(seg(t, TLb.brand));
+    if (a <= 0) return;
+    const rise = 1 - a;
+    const parts = [
+      { txt:"আমার বাংলাদেশ", font:`700 25px ${FONT}`, color:T.ink },
+      { txt:" · " + SITE.label, font:`600 23px ${FONT}`, color:T.v1 },
+      { txt:" · " + SITE.host, font:`600 21px ${FONT}`, color:T.muted },
+    ];
+    ctx.save();
+    ctx.globalAlpha = a * .96;
+    ctx.textBaseline = "alphabetic";
+    let total = 0;
+    for (const p of parts){ ctx.font = p.font; p.w = ctx.measureText(p.txt).width; total += p.w; }
+    const dotR = 9, gap = 14;
+    let x = W/2 - (total + gap + dotR*2) / 2;
+    const y = 1396 + 12*rise;
+    ctx.beginPath(); ctx.arc(x + dotR, y - 8, dotR, 0, Math.PI*2);
+    ctx.fillStyle = T.dot; ctx.fill();
+    x += dotR*2 + gap;
+    for (const p of parts){
+      ctx.font = p.font; ctx.fillStyle = p.color;
+      ctx.fillText(p.txt, x, y);
+      x += p.w;
     }
     ctx.restore();
   }
@@ -282,6 +335,7 @@ function build(canvas, opts){
     drawRoute(t);
     drawPieces(t);
     drawLabels(t);
+    drawBrand(t);
     drawHeader(t);
     drawFooter(t);
     return "ok";
@@ -289,7 +343,8 @@ function build(canvas, opts){
 
   /* canvas-space hit test: exact path first, then nearest small feature's centroid */
   function hit(px, py){
-    const gx = (px - DS.GEO.x) / DS.GEO.s, gy = (py - DS.GEO.y) / DS.GEO.s;
+    const gx = (px - DS.GEO.x + DS.GEO.ox*DS.GEO.s) / DS.GEO.s;
+    const gy = (py - DS.GEO.y + DS.GEO.oy*DS.GEO.s) / DS.GEO.s;
     for (let i = DS.data.f.length - 1; i >= 0; i--)
       if (new Path2D(DS.data.f[i].d).isPointInPath(gx, gy)) return DS.data.f[i].n;
     let best = null, bd = 15;
@@ -351,5 +406,5 @@ async function fontsReady(){
   } catch (e) {}
 }
 
-return { build, play, record, fontsReady, T, TL, FONT, bn, missing, W, H, DATA_REF: () => DATA, BN_REF: () => BN };
+return { build, play, record, fontsReady, T, TL, FONT, SITE, bn, missing, W, H, DATA_REF: () => DATA, BN_REF: () => BN };
 })();

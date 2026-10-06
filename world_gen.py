@@ -147,12 +147,52 @@ BN = {
  "Yemen":"ইয়েমেন","Zambia":"জাম্বিয়া","Zimbabwe":"জিম্বাবুয়ে",
 }
 
+CONT = {
+ "এশিয়া": ["Afghanistan","Armenia","Azerbaijan","Bangladesh","Bhutan","Brunei","Cambodia","China",
+   "Cyprus","East Timor","Georgia","India","Indonesia","Iran","Iraq","Israel","Japan","Jordan",
+   "Kazakhstan","Kuwait","Kyrgyzstan","Laos","Lebanon","Malaysia","Mongolia","Myanmar","Nepal",
+   "North Korea","Northern Cyprus","Oman","Pakistan","Philippines","Qatar","Saudi Arabia",
+   "South Korea","Sri Lanka","Syria","Taiwan","Tajikistan","Thailand","Turkey","Turkmenistan",
+   "United Arab Emirates","Uzbekistan","Vietnam","West Bank","Yemen"],
+ "ইউরোপ": ["Albania","Austria","Belarus","Belgium","Bosnia and Herzegovina","Bulgaria","Croatia",
+   "Czech Republic","Denmark","Estonia","Finland","France","Germany","Greece","Hungary","Iceland",
+   "Ireland","Italy","Kosovo","Latvia","Lithuania","Luxembourg","Macedonia","Malta","Moldova",
+   "Montenegro","Netherlands","Norway","Poland","Portugal","Romania","Republic of Serbia","Russia",
+   "Slovakia","Slovenia","Spain","Sweden","Switzerland","Ukraine","United Kingdom"],
+ "আফ্রিকা": ["Algeria","Angola","Benin","Botswana","Burkina Faso","Burundi","Cameroon",
+   "Central African Republic","Chad","Democratic Republic of the Congo","Djibouti","Egypt",
+   "Equatorial Guinea","Eritrea","Ethiopia","Gabon","Gambia","Ghana","Guinea","Guinea Bissau",
+   "Ivory Coast","Kenya","Lesotho","Liberia","Libya","Madagascar","Malawi","Mali","Mauritania",
+   "Morocco","Mozambique","Namibia","Niger","Nigeria","Republic of the Congo","Rwanda","Senegal",
+   "Sierra Leone","Somalia","Somaliland","South Africa","South Sudan","Sudan","Swaziland","Togo",
+   "Tunisia","Uganda","United Republic of Tanzania","Western Sahara","Zambia","Zimbabwe"],
+ "উত্তর আমেরিকা": ["Belize","Bermuda","Canada","Costa Rica","Cuba","Dominican Republic",
+   "El Salvador","Greenland","Guatemala","Haiti","Honduras","Jamaica","Mexico","Nicaragua",
+   "Panama","Puerto Rico","The Bahamas","Trinidad and Tobago","United States of America"],
+ "দক্ষিণ আমেরিকা": ["Argentina","Bolivia","Brazil","Chile","Colombia","Ecuador","Falkland Islands",
+   "French Guiana","Guyana","Paraguay","Peru","Suriname","Uruguay","Venezuela"],
+ "ওশেনিয়া": ["Australia","Fiji","French Southern and Antarctic Lands","New Caledonia",
+   "New Zealand","Papua New Guinea","Solomon Islands","Vanuatu"],
+}
+
 g = json.load(io.open(SRC, encoding="utf-8"))
 feats = [f for f in g["features"] if f["properties"]["name"] != "Antarctica"]
 
 missing_bn = sorted(f["properties"]["name"] for f in feats if f["properties"]["name"] not in BN)
 if missing_bn:
     raise SystemExit("missing Bangla names: " + json.dumps(missing_bn, ensure_ascii=False))
+
+names = [f["properties"]["name"] for f in feats]
+cont_of = {}
+for cont, members in CONT.items():
+    for n in members:
+        if n in cont_of:
+            raise SystemExit(f"duplicate continent entry: {n}")
+        cont_of[n] = cont
+bad = sorted(set(names) - set(cont_of)) or sorted(set(cont_of) - set(names))
+if bad:
+    raise SystemExit("continent list does not match dataset: " + json.dumps(bad, ensure_ascii=False))
+print("continents:", [len(m) for m in CONT.values()], "total", len(cont_of))
 
 out = []
 for f in feats:
@@ -173,8 +213,8 @@ for f in feats:
     for r in rings_px:
         d += "M" + "L".join(fmt(x) + "," + fmt(y) for x, y in r) + "Z"
     cx, cy = centroid(rings_px)
-    out.append({"i": f.get("id", ""), "n": name, "d": d,
-                "c": [round(cx, 1), round(cy, 1)]})
+    out.append({"i": f.get("id", ""), "n": name, "d": d, "c": [round(cx, 1), round(cy, 1)],
+                "ct": cont_of[name]})
 
 out.sort(key=lambda o: o["n"])
 payload = {"w": W, "h": round(H, 1), "f": out}

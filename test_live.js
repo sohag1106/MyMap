@@ -74,8 +74,9 @@ async function waitReady(ws, ms = 30000) {
       title: document.title
     })`);
     console.log("video page:", v.path, "| title:", v.title);
-    console.log("caption link line:", (v.cap.match(/তোমার নিজের ম্যাপ বানাতে 👉 \\S+/) || ["MISSING"])[0]);
-    if (!v.cap.includes("https://mymap.brightskyit.com/index.html")) throw new Error("caption URL wrong: " + v.path);
+    const cap = v.cap;
+    console.log("caption link line:", (cap.match(/👉 (\S+)/) || ["MISSING", "?"])[1]);
+    if (!cap.includes("mymap.brightskyit.com")) throw new Error("caption URL wrong: " + cap);
 
     await ws("Page.navigate", { url: "https://mymap.brightskyit.com/" });
     await sleep(500);
