@@ -345,8 +345,10 @@ function build(canvas, opts){
   function hit(px, py){
     const gx = (px - DS.GEO.x + DS.GEO.ox*DS.GEO.s) / DS.GEO.s;
     const gy = (py - DS.GEO.y + DS.GEO.oy*DS.GEO.s) / DS.GEO.s;
+    /* isPointInPath is on the context, not on Path2D — pass the path and coordinates
+       (any transform on ctx is ignored for this overload) */
     for (let i = DS.data.f.length - 1; i >= 0; i--)
-      if (new Path2D(DS.data.f[i].d).isPointInPath(gx, gy)) return DS.data.f[i].n;
+      if (ctx.isPointInPath(new Path2D(DS.data.f[i].d), gx, gy)) return DS.data.f[i].n;
     let best = null, bd = 15;
     for (const f of DS.data.f){
       const cx = DS.GEO.x + f.c[0]*DS.GEO.s, cy = DS.GEO.y + f.c[1]*DS.GEO.s;

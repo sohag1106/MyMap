@@ -20,7 +20,7 @@ body{min-height:100vh;display:flex;flex-direction:column;align-items:center;padd
 .topbar h1{margin:0;font-size:22px;font-weight:800}
 .topbar span{font-size:13px;color:var(--muted);font-weight:500}
 .poster{width:min(520px,100%);padding:0 10px}
-canvas{width:100%;height:auto;display:block;border-radius:16px;box-shadow:0 10px 40px rgba(23,32,28,.16);background:var(--bg);touch-action:none}
+canvas{width:100%;height:auto;display:block;border-radius:16px;box-shadow:0 10px 40px rgba(23,32,28,.16);background:var(--bg);touch-action:pan-y;user-select:none;-webkit-user-select:none}
 .posterAct{display:flex;gap:8px;margin-top:10px}
 .posterAct button{flex:1;border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 8px;font:600 14px "Anek Bangla",sans-serif;color:var(--ink);cursor:pointer}
 .posterAct button.pri{background:linear-gradient(135deg,var(--brand),var(--brand2));border-color:var(--brand);color:#fff}
@@ -28,6 +28,7 @@ canvas{width:100%;height:auto;display:block;border-radius:16px;box-shadow:0 10px
 .card h2{margin:0 0 10px;font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .photoBtn{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px dashed #cfc7b4;border-radius:12px;padding:8px 12px;font:600 14px "Anek Bangla",sans-serif;color:var(--ink);cursor:pointer}
+.photoBtn img,.photoBtn span{pointer-events:none}
 .photoBtn .thumb{width:40px;height:40px;border-radius:10px;object-fit:cover;background:#ddd;border:2px solid var(--brand)}
 .photoBtn .ph{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:var(--bg);border:2px dashed var(--brand);font-size:19px}
 .photoBtn .ph[hidden]{display:none}
@@ -306,25 +307,37 @@ function refresh(){
   saveCfg();
 }
 
-/* map interaction (works in both modes) */
+/* map interaction (works in both modes).
+   touch-action is pan-y so the page still scrolls when a finger starts on the map —
+   a tap selects a region only if the finger barely moved (movement < 10 canvas px). */
 function evPos(e){
   const r = cv.getBoundingClientRect();
   return [ (e.clientX - r.left) * (cv.width / r.width), (e.clientY - r.top) * (cv.height / r.height) ];
 }
-cv.addEventListener("pointerdown", e => {
-  const [x, y] = evPos(e);
+let touchStart = null;
+const DRAG = 10;
+function pickAt(x, y){
   const f = eng() && eng().hit(x, y);
   if (!f) return;
-  if (mode === "bd"){
-    const i = cfg.sel.indexOf(f);
-    if (i >= 0) cfg.sel.splice(i, 1); else cfg.sel.push(f);
-  } else {
-    const i = cfg.wsel.indexOf(f);
-    if (i >= 0) cfg.wsel.splice(i, 1); else cfg.wsel.push(f);
-  }
+  const c = mode === "bd" ? cfg.sel : cfg.wsel;
+  const i = c.indexOf(f);
+  if (i >= 0) c.splice(i, 1); else c.push(f);
   refresh();
+}
+cv.addEventListener("pointerdown", e => {
+  const [x, y] = evPos(e);
+  touchStart = { x, y, id: e.pointerId };
 });
+cv.addEventListener("pointerup", e => {
+  if (!touchStart || touchStart.id !== e.pointerId) return;
+  const [x, y] = evPos(e);
+  const moved = Math.hypot(x - touchStart.x, y - touchStart.y);
+  touchStart = null;
+  if (moved < DRAG) pickAt(x, y);
+});
+cv.addEventListener("pointercancel", () => { touchStart = null; });
 cv.addEventListener("pointermove", e => {
+  if (touchStart) return;                       // touch: don't fight the scroll
   const [x, y] = evPos(e);
   cv.style.cursor = (eng() && eng().hit(x, y)) ? "pointer" : "default";
 });
@@ -443,7 +456,12 @@ document.getElementById("tabW").onclick = () => setMode("w");
 const nameIn = document.getElementById("nameIn");
 nameIn.value = cfg.name || "";
 nameIn.oninput = () => { cfg.name = nameIn.value; refresh(); };
-document.getElementById("photoBtn").onclick = () => document.getElementById("photoIn").click();
+/* whole button (thumbnail included) opens the file picker */
+const photoBtnEl = document.getElementById("photoBtn");
+const openPicker = e => { e.preventDefault(); document.getElementById("photoIn").click(); };
+photoBtnEl.onclick = openPicker;
+photoBtnEl.querySelectorAll("img, .thumb").forEach(el => el.ondragstart = e => e.preventDefault());
+document.getElementById("thumb").addEventListener("click", openPicker);
 document.getElementById("photoIn").onchange = e => {
   const file = e.target.files && e.target.files[0];
   if (!file) return;
@@ -456,7 +474,7 @@ document.getElementById("photoIn").onchange = e => {
     c2.getContext("2d").drawImage(img, 0, 0, c2.width, c2.height);
     cfg.photo = c2.toDataURL("image/jpeg", .86);
     applyPhoto(cfg.photo);
-    document.getElementById("thumb").src = cfg.photo;
+    syncPhotoBtn();                              /* unhide thumb + relabel right away, not on next load */
     saveCfg();
     URL.revokeObjectURL(img.src);
   };

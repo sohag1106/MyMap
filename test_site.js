@@ -156,6 +156,135 @@ async function main() {
     if (!imgShare.shImg || !imgShare.shVid) throw new Error("home share buttons missing");
     if (imgShare.host !== "mymap.brightskyit.com") throw new Error("watermark host wrong: " + imgShare.host);
 
+    /* --- 1d. mobile: a touch that starts on the map must scroll the page, and a tap
+       on the uploaded photo thumbnail must open the file picker --- */
+    await ws("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+    await ws("Emulation.setDeviceMetricsOverride", { width: 390, height: 780, deviceScaleFactor: 3, mobile: true });
+    /* the world tab was left active by the section above — go back to districts */
+    await evalJs(ws, "document.getElementById('tabBd').click(); window.scrollTo(0, 0); 'ok'");
+    await sleep(700);
+    const mapBox = await evalJs(ws, `(() => { const r = document.getElementById('cv').getBoundingClientRect();
+      return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) }; })()`);
+    const touchAction = await evalJs(ws, "getComputedStyle(document.getElementById('cv')).touchAction");
+    /* a point that is genuinely inside the Dhaka district, in canvas coordinates */
+    await evalJs(ws, `(() => {
+      const g = EN.bd.GEO, f = DATA.f.find(x => x.n === 'Dhaka');
+      window.__inside = { x: g.x + (f.c[0]-g.ox)*g.s, y: g.y + (f.c[1]-g.oy)*g.s };
+      window.__hit = EN.bd.hit(window.__inside.x, window.__inside.y);
+      return 'ok';
+    })()`);
+    const hitName = await evalJs(ws, "window.__hit");
+    /* drag upward from the middle of the map — this is what a user does to scroll down */
+    const cx = mapBox.x, cy = mapBox.y;
+    await ws("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: cx, y: cy, id: 1 }] });
+    for (let i = 1; i <= 6; i++) {
+      await ws("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: cx, y: cy - i * 40, id: 1 }] });
+      await sleep(30);
+    }
+    await ws("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await sleep(600);
+    const scrolled = await evalJs(ws, "window.scrollY");
+    const selAfterDrag = await evalJs(ws, "cfg.sel.length");
+
+    /* now a clean tap on a district should still select it */
+    await evalJs(ws, "window.scrollTo(0, 0); 'ok'");
+    await sleep(300);
+    const before = await evalJs(ws, "cfg.sel.length");
+    const tapXY = await evalJs(ws, `(() => { const cv = document.getElementById('cv'), r = cv.getBoundingClientRect();
+      const i = window.__inside;
+      return { x: Math.round(r.left + i.x * (r.width/cv.width)), y: Math.round(r.top + i.y * (r.height/cv.height)) }; })()`);
+    await ws("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: tapXY.x, y: tapXY.y, id: 2 }] });
+    await ws("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await sleep(400);
+    const after = await evalJs(ws, "cfg.sel.length");
+
+    /* desktop click path: a plain mouse click on Dhaka must select it */
+    await sleep(200);
+    const clickSel = await evalJs(ws, `(() => {
+      const cv = document.getElementById('cv'), r = cv.getBoundingClientRect();
+      const i = window.__inside;
+      const px = r.left + i.x * (r.width / cv.width), py = r.top + i.y * (r.height / cv.height);
+      const opts = { bubbles: true, clientX: px, clientY: py, pointerId: 9, pointerType: 'mouse', isPrimary: true };
+      cv.dispatchEvent(new PointerEvent('pointerdown', opts));
+      cv.dispatchEvent(new PointerEvent('pointerup', opts));
+      return cfg.sel.filter(n => n === 'Dhaka').length;
+    })()`);
+    const desktopDelta = clickSel;   /* 1 = Dhaka was off and got turned on */
+
+    /* tap the photo button (whole button — thumbnail + placeholder): should arm the
+       picker, not silently do nothing. A real touch tap, at the button's own
+       coordinates, scrolled into the viewport first (on mobile it sits below the map). */
+    const txy = await evalJs(ws, `(() => {
+      const b = document.getElementById('photoBtn');
+      b.scrollIntoView({ block: 'center' });
+      const r = b.getBoundingClientRect();
+      return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) };
+    })()`);
+    await evalJs(ws, `(() => {
+      window.__picked = 0;
+      document.getElementById('photoIn').click = () => { window.__picked++; };  // stub the native dialog
+      return 'ok';
+    })()`);
+    await ws("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: txy.x, y: txy.y, id: 3 }] });
+    await sleep(60);
+    await ws("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await sleep(300);
+    const picked = await evalJs(ws, "window.__picked");
+
+    /* a real image upload: after the file lands, the thumbnail must be visible and the
+       label must flip to "change photo" without needing a reload */
+    const upload = await evalJs(ws, `(async () => {
+      // 1x1 red PNG as a stand-in for a user photo
+      const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      const bin = atob(b64), arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      const file = new File([arr], 'me.png', { type: 'image/png' });
+      const input = document.getElementById('photoIn');
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      // wait for the img onload handler to apply the data-URL
+      for (let i = 0; i < 40; i++) {
+        if (!document.getElementById('thumb').hidden && document.getElementById('photoLbl').textContent.includes('বদলাও')) break;
+        await new Promise(r => setTimeout(r, 50));
+      }
+      return {
+        hidden: document.getElementById('thumb').hidden,
+        lbl: document.getElementById('photoLbl').textContent,
+        hasSrc: (document.getElementById('thumb').src || '').startsWith('data:image'),
+        phHidden: document.getElementById('thumbPh').hidden,
+      };
+    })()`, true);
+    const storedPhoto = await evalJs(ws, `(() => {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        try { const c = JSON.parse(localStorage.getItem(k)); if (c && c.photo) return { key: k, len: c.photo.length }; } catch {}
+      }
+      return null;
+    })()`);
+    console.log("photo upload OK — thumb:", JSON.stringify(upload), "| stored:", JSON.stringify(storedPhoto));
+    if (upload.hidden !== false) throw new Error("thumbnail still hidden after upload");
+    if (!upload.hasSrc) throw new Error("thumbnail has no data-URL src after upload");
+    if (!upload.lbl.includes("বদলাও")) throw new Error("photo label did not flip after upload: " + upload.lbl);
+    if (upload.phHidden !== true) throw new Error("placeholder still visible after upload");
+    if (!storedPhoto || storedPhoto.len < 100) throw new Error("photo was not persisted to localStorage");
+
+    await ws("Emulation.setTouchEmulationEnabled", { enabled: false });
+    await ws("Emulation.setDeviceMetricsOverride", { width: 760, height: 2400, deviceScaleFactor: 1, mobile: false });
+
+    console.log("mobile scroll OK — touch-action:", touchAction, "| scrolled to y =", scrolled,
+                "| districts changed by the drag:", selAfterDrag - before);
+    console.log("mobile tap OK — Dhaka via desktop click:", desktopDelta, "| hit() on that point:", hitName,
+                "| tap changed selection:", before, "->", after, "| photo picker fired:", picked, "time(s)");
+    if (touchAction !== "pan-y") throw new Error("canvas must be touch-action:pan-y so the page scrolls, got " + touchAction);
+    if (scrolled < 100) throw new Error("dragging on the map did not scroll the page (scrollY=" + scrolled + ")");
+    if (selAfterDrag !== before) throw new Error("a scroll drag changed the selection");
+    if (hitName !== "Dhaka") throw new Error("hit() resolved " + hitName + " instead of Dhaka — tap-to-select is broken");
+    if (desktopDelta !== 1) throw new Error("a desktop click on Dhaka did not select it");
+    if (after === before) throw new Error("a tap did not change the selection");
+    if (picked !== 1) throw new Error("tapping the photo button did not open the picker (fired " + picked + "x)");
+
     /* --- 2. video.html?still=1: poster + share panel, no record (BD forced) --- */
     await ws("Page.navigate", { url: BASE + "/video.html?still=1&mode=bd" });
     await sleep(400);
