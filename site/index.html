@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>আমার বাংলাদেশ — ভিডিও ম্যাপ বানান</title>
+<meta name="description" content="তোমার ঘুরা জেলাগুলো দিয়ে বানাও একটি অ্যানিমেটেড ভিডিও ম্যাপ — এক ট্যাপে ফেসবুকে শেয়ার করো। দেশ ধরেও বানানো যায়!">
+<meta property="og:title" content="আমার বাংলাদেশ — ভিডিও ম্যাপ">
+<meta property="og:description" content="তোমার ঘুরা জেলাগুলো দিয়ে অ্যানিমেটেড ভিডিও ম্যাপ বানান।">
+<!-- Deploy-এর পর এখানে absolute URL দিয়ে og:image যোগ করো (FB-তে লিংক প্রিভিউয়ের জন্য) -->
+<link rel="stylesheet" href="fonts.css">
+<style>
+:root{--bg:#f6f2ea;--ink:#17201c;--muted:#7a7f78;--brand:#0f6b4f;--brand2:#1f9a70;--line:#e7e1d4;--dot:#f42a41}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Anek Bangla",system-ui,sans-serif}
+body{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding-bottom:110px}
+.topbar{width:100%;max-width:640px;display:flex;align-items:baseline;gap:10px;padding:16px 18px 6px}
+.topbar h1{margin:0;font-size:22px;font-weight:800}
+.topbar span{font-size:13px;color:var(--muted);font-weight:500}
+.poster{width:min(520px,100%);padding:0 10px}
+canvas{width:100%;height:auto;display:block;border-radius:16px;box-shadow:0 10px 40px rgba(23,32,28,.16);background:var(--bg);touch-action:none}
+.card{width:min(520px,100%);margin:14px 10px 0;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 14px 16px}
+.card h2{margin:0 0 10px;font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.photoBtn{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px dashed #cfc7b4;border-radius:12px;padding:8px 12px;font:600 14px "Anek Bangla",sans-serif;color:var(--ink);cursor:pointer}
+.photoBtn .thumb{width:40px;height:40px;border-radius:10px;object-fit:cover;background:#ddd;border:2px solid var(--brand)}
+input[type=text]{flex:1;min-width:160px;font:500 15px "Anek Bangla",sans-serif;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);outline:none}
+input[type=text]:focus{border-color:var(--brand)}
+/* mode tabs */
+.tabs{display:flex;width:min(520px,100%);margin:14px 10px 0;background:#fff;border:1px solid var(--line);border-radius:14px;padding:5px;gap:5px}
+.tab{flex:1;border:0;background:transparent;border-radius:10px;padding:11px 8px;font:700 15px "Anek Bangla",sans-serif;color:var(--muted);cursor:pointer}
+.tab.on{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 4px 12px rgba(15,107,79,.3)}
+/* picker */
+.pickHead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pickHead h3{margin:0;font-size:17px;font-weight:800}
+.countBadge{background:var(--brand);color:#fff;border-radius:999px;padding:4px 12px;font:700 14px "Anek Bangla",sans-serif}
+.searchWrap{position:relative;margin-top:10px}
+.searchWrap .ic{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:15px}
+.searchWrap input{width:100%;padding:11px 12px 11px 36px;border:1px solid var(--line);border-radius:12px;background:var(--bg);font:500 15px "Anek Bangla",sans-serif;color:var(--ink);outline:none}
+.searchWrap input:focus{border-color:var(--brand)}
+.bulkRow{display:flex;gap:18px;margin-top:9px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.bulkRow button{border:0;background:none;padding:0;font:600 14px "Anek Bangla",sans-serif;color:var(--brand);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.bulkRow button.danger{color:#b4553f}
+.grp{margin-top:12px}
+.grpHead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+.grpHead .gt{font:700 14.5px "Anek Bangla",sans-serif;color:var(--ink)}
+.grpHead .gt small{color:var(--muted);font-weight:600}
+.grpHead button{border:0;background:none;padding:0;font:600 13.5px "Anek Bangla",sans-serif;color:var(--brand);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+.chip{border:1px solid var(--line);background:var(--bg);color:var(--ink);font:600 13.5px "Anek Bangla",sans-serif;padding:7px 13px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.chip .tick{display:none;font-size:11px}
+.chip.on .tick{display:inline}
+.ghost{border:1px solid var(--line);background:transparent;color:var(--muted);font:600 13px "Anek Bangla",sans-serif;padding:7px 12px;border-radius:999px;cursor:pointer}
+.hint{font-size:13.5px;color:var(--muted);margin:11px 0 0}
+.hint b{color:var(--brand)}
+.howto{width:min(520px,100%);margin:14px 10px 0;font-size:13.5px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.howto ol{margin:6px 0 0;padding-left:20px}
+.howto li{margin:3px 0}
+.ctaWrap{position:fixed;left:0;right:0;bottom:0;padding:12px 14px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(transparent, var(--bg) 30%);display:flex;justify-content:center}
+.cta{width:min(520px,100%);border:0;border-radius:14px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;font:700 17px "Anek Bangla",sans-serif;padding:15px 18px;cursor:pointer;box-shadow:0 8px 24px rgba(15,107,79,.35);display:flex;align-items:center;justify-content:center;gap:8px}
+.cta:disabled{opacity:.45;box-shadow:none;cursor:not-allowed}
+.badge{display:inline-flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:5px 12px;font:700 13px "Anek Bangla",sans-serif;color:var(--brand)}
+.hidden{display:none}
+footer.site{margin:22px 10px 8px;font-size:12.5px;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>আমার বাংলাদেশ</h1>
+  <span>ভিডিও ম্যাপ বানাও · ফেসবুকে শেয়ার করো</span>
+</div>
+
+<div class="poster"><canvas id="cv" width="1200" height="1600"></canvas></div>
+
+<div class="card">
+  <h2>তোমার পরিচয়</h2>
+  <div class="row">
+    <button class="photoBtn" id="photoBtn" type="button">
+      <img class="thumb" id="thumb" alt="" src="profile.jpg">
+      <span>ছবি বদলাও</span>
+    </button>
+    <input type="text" id="nameIn" maxlength="24" placeholder="নাম (ঐচ্ছিক) — যেমন: রাহিম">
+  </div>
+  <div class="row" style="margin-top:12px">
+    <span class="badge" id="statBadge">০/৬৪ জেলা · ০%</span>
+  </div>
+  <input type="file" id="photoIn" accept="image/*" class="hidden">
+</div>
+
+<div class="tabs" role="tablist">
+  <button class="tab on" id="tabBd" type="button">বাংলাদেশ · জেলা</button>
+  <button class="tab" id="tabW" type="button">বিশ্ব · দেশ</button>
+</div>
+
+<!-- ===== জেলা picker ===== -->
+<div class="card" id="cardBd">
+  <div class="pickHead">
+    <h3>যেসব জেলায় গিয়েছি</h3>
+    <span class="countBadge" id="bdCount">০/৬৪</span>
+  </div>
+  <div class="searchWrap">
+    <span class="ic">🔍</span>
+    <input type="text" id="bdSearch" placeholder="জেলা খুঁজুন..." autocomplete="off">
+  </div>
+  <div class="bulkRow">
+    <button id="bdAll" type="button">সব বাছাই করুন</button>
+    <button id="bdNone" class="danger" type="button">সব মুছুন</button>
+  </div>
+  <div id="bdGroups"></div>
+  <div class="row" style="margin-top:12px">
+    <button class="ghost" id="demoBtn" type="button">✨ উদাহরণ দেখাও (২৬টি জেলা)</button>
+  </div>
+  <p class="hint">মানচিত্রে সরাসরি <b>জেলায় ক্লিক/ট্যাপ</b> করেও বাছাই করা যায়। পোস্টার লাইভ আপডেট হচ্ছে।</p>
+</div>
+
+<!-- ===== দেশ picker ===== -->
+<div class="card hidden" id="cardW">
+  <div class="pickHead">
+    <h3>কোন কোন দেশ ঘুরেছ?</h3>
+    <span class="countBadge" id="wCount">০/১৭৯</span>
+  </div>
+  <div class="searchWrap">
+    <span class="ic">🔍</span>
+    <input type="text" id="wSearch" placeholder="দেশ খুঁজুন..." autocomplete="off">
+  </div>
+  <div class="bulkRow">
+    <button id="wAll" type="button">সব বাছাই করুন</button>
+    <button id="wNone" class="danger" type="button">সব মুছুন</button>
+  </div>
+  <div class="chips" id="wChips" style="max-height:420px;overflow:auto;padding-top:4px"></div>
+  <div class="row" style="margin-top:12px">
+    <button class="ghost" id="demoWBtn" type="button">✨ উদাহরণ (১৪টি দেশ)</button>
+  </div>
+  <p class="hint">মানচিত্রে <b>দেশে ক্লিক/ট্যাপ</b> করেও বাছাই করা যায় — ঠিক জেলার মতোই।</p>
+</div>
+
+<div class="howto">
+  কীভাবে কাজ করে:
+  <ol>
+    <li>জেলা বা দেশ সিলেক্ট করো, ছবি দাও</li>
+    <li><b>ভিডিও তৈরি করুন</b> — ১২ সেকেন্ডে ম্যাপ জুড়ে তৈরি হবে</li>
+    <li>এক ট্যাপে ফেসবুকে পোস্ট করো 🎬</li>
+  </ol>
+</div>
+
+<div class="ctaWrap">
+  <button class="cta" id="goBtn" disabled>🎬 ভিডিও তৈরি করুন</button>
+</div>
+
+<footer class="site">তোমার ভ্রমণ, তোমার গল্প · সবকিছু তোমার ব্রাউজারেই তৈরি হয়</footer>
+
+<script src="bd_data.js"></script>
+<script src="world_data.js"></script>
+<script src="map.js"></script>
+<script>
+"use strict";
+const KEY = "mb_cfg";
+const DEMO = ["Gazipur","Narsingdi","Munshiganj","Narayanganj","Shariatpur","Tangail",
+  "Kishorganj","Mymensingh","Habiganj","Moulvibazar","Sunamganj","Sylhet",
+  "Brahmanbaria","Chandpur","Cumilla","Feni","Noakhali","Lakshmipur",
+  "Chattogram","Khagrachhari","Rangamati","Bandarban","Cox's Bazar",
+  "Patuakhali","Barishal","Bhola"];
+const DEMO_W = ["India","Nepal","Bhutan","China","Myanmar","Thailand","Malaysia",
+  "Indonesia","United Arab Emirates","Saudi Arabia","Turkey","Egypt",
+  "United Kingdom","France"];
+const DIVS = ["Dhaka","Chattogram","Sylhet","Rajshahi","Khulna","Barishal","Rangpur","Mymensingh"];
+const DV_BN = {Dhaka:"ঢাকা",Chattogram:"চট্টগ্রাম",Sylhet:"সিলেট",Rajshahi:"রাজশাহী",
+  Khulna:"খুলনা",Barishal:"বরিশাল",Rangpur:"রংপুর",Mymensingh:"ময়মনসিংহ"};
+const SEL = DIVS.reduce((o,d) => (o[d] = DATA.f.filter(f => f.dv === d).map(f => f.n), o), {});
+
+function loadCfg(){
+  try { const c = JSON.parse(localStorage.getItem(KEY)); if (c && Array.isArray(c.sel)) return c; } catch (e) {}
+  return { sel: [], wsel: [], name: "", photo: "", mode: "bd" };
+}
+function saveCfg(){ try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (e) {} }
+
+const cfg = loadCfg();
+cfg.sel = cfg.sel.filter(n => DATA.f.some(f => f.n === n));
+if (!Array.isArray(cfg.wsel)) cfg.wsel = [];
+cfg.wsel = cfg.wsel.filter(n => WORLD.f.some(f => f.n === n));
+let mode = cfg.mode === "w" ? "w" : "bd";
+
+const cv = document.getElementById("cv");
+
+/* engines — one per dataset, active one drawn */
+function makeEngines(){
+  const bd = MAP.build(cv, { selected: cfg.sel, data: DATA, bn: BN, denom: 64 });
+  const w = MAP.build(cv, {
+    selected: cfg.wsel, data: WORLD, bn: WORLD_BN, denom: WORLD.f.length,
+    sub: "বিশ্ব ভ্রমণ ম্যাপ",
+    footL: st => `${MAP.bn(st.pct)}% পৃথিবী ঘুরা হয়েছে`,
+    footR: st => `${MAP.bn(st.landed)}টি দেশ ঘুরেছ`,
+  });
+  return { bd, w };
+}
+let EN = { bd: null, w: null };
+const eng = () => EN[mode];
+
+/* name → possessive title, e.g. রাহিম → রাহিমের বাংলাদেশ */
+function titleFromName(raw, m){
+  const n = (raw || "").trim();
+  const tail = m === "w" ? "বিশ্ব" : "বাংলাদেশ";
+  if (!n) return "আমার " + tail;
+  if (/র$/.test(n)) return n + " " + tail;
+  if (/[অআইঈউঊএঐওৌািীুূেৈোৌ]$/.test(n)) return n + "র " + tail;
+  return n + "ের " + tail;
+}
+
+/* photo */
+const photoImg = new Image();
+function applyPhoto(src){
+  const set = () => { if (EN.bd) EN.bd.setPhoto(photoImg); if (EN.w) EN.w.setPhoto(photoImg); refresh(); };
+  photoImg.onload = set;
+  photoImg.onerror = set;
+  photoImg.src = src || "profile.jpg";
+}
+
+function refresh(){
+  const e = eng();
+  if (!e) return;
+  e.setSelection(mode === "bd" ? cfg.sel : cfg.wsel);
+  e.setTitle(titleFromName(cfg.name, mode));
+  e.seek(e.TL.dur);
+  const st = e.stateAt(e.TL.dur);
+  const isBd = mode === "bd";
+  document.getElementById("statBadge").textContent = isBd
+    ? `${MAP.bn(st.landed)}/${MAP.bn(64)} জেলা · ${MAP.bn(st.pct)}% · ${MAP.bn(st.divs)} বিভাগ`
+    : `${MAP.bn(st.landed)}/${MAP.bn(WORLD.f.length)} দেশ · ${MAP.bn(st.pct)}% পৃথিবী`;
+  document.getElementById("bdCount").textContent = `${MAP.bn(cfg.sel.length)}/${MAP.bn(64)}`;
+  document.getElementById("wCount").textContent = `${MAP.bn(cfg.wsel.length)}/${MAP.bn(WORLD.f.length)}`;
+  const go = document.getElementById("goBtn");
+  go.disabled = st.total === 0;
+  go.textContent = st.total
+    ? `🎬 ${MAP.bn(st.total)}টি ${isBd ? "জেলা" : "দেশ"} দিয়ে ভিডিও তৈরি করুন`
+    : "🎬 ভিডিও তৈরি করুন";
+  document.querySelectorAll(".chip[data-bd]").forEach(ch => {
+    ch.classList.toggle("on", cfg.sel.includes(ch.dataset.bd));
+  });
+  document.querySelectorAll(".chip[data-en]").forEach(ch => {
+    const on = cfg.wsel.includes(ch.dataset.en);
+    ch.classList.toggle("on", on);
+  });
+  document.querySelectorAll(".grp").forEach(g => {
+    const head = g.querySelector(".gt");
+    if (head && head.dataset.dv){
+      const dv = head.dataset.dv;
+      head.innerHTML = `${DV_BN[dv]} বিভাগ <small>${MAP.bn(cfg.sel.filter(n => SEL[dv].includes(n)).length)}/${MAP.bn(SEL[dv].length)}</small>`;
+    }
+  });
+  saveCfg();
+}
+
+/* map interaction (works in both modes) */
+function evPos(e){
+  const r = cv.getBoundingClientRect();
+  return [ (e.clientX - r.left) * (cv.width / r.width), (e.clientY - r.top) * (cv.height / r.height) ];
+}
+cv.addEventListener("pointerdown", e => {
+  const [x, y] = evPos(e);
+  const f = eng() && eng().hit(x, y);
+  if (!f) return;
+  if (mode === "bd"){
+    const i = cfg.sel.indexOf(f);
+    if (i >= 0) cfg.sel.splice(i, 1); else cfg.sel.push(f);
+  } else {
+    const i = cfg.wsel.indexOf(f);
+    if (i >= 0) cfg.wsel.splice(i, 1); else cfg.wsel.push(f);
+  }
+  refresh();
+});
+cv.addEventListener("pointermove", e => {
+  const [x, y] = evPos(e);
+  cv.style.cursor = (eng() && eng().hit(x, y)) ? "pointer" : "default";
+});
+
+/* ---------- build district groups ---------- */
+const groupsBox = document.getElementById("bdGroups");
+DIVS.forEach(d => {
+  const g = document.createElement("div");
+  g.className = "grp"; g.dataset.grp = d;
+  const head = document.createElement("div");
+  head.className = "grpHead";
+  head.innerHTML = `<span class="gt" data-dv="${d}"></span><button type="button" data-selall="${d}">সব বাছাই</button>`;
+  const chips = document.createElement("div");
+  chips.className = "chips";
+  SEL[d].map(n => DATA.f.find(f => f.n === n))
+       .sort((a, b) => (BN[a.n] || a.n).localeCompare(BN[b.n] || b.n, "bn"))
+       .forEach(f => {
+    const c = document.createElement("button");
+    c.className = "chip"; c.type = "button"; c.dataset.bd = f.n;
+    c.innerHTML = `<span class="tick">✓</span>${BN[f.n] || f.n}`;
+    c.onclick = () => {
+      const i = cfg.sel.indexOf(f.n);
+      if (i >= 0) cfg.sel.splice(i, 1); else cfg.sel.push(f.n);
+      refresh();
+    };
+    chips.appendChild(c);
+  });
+  head.querySelector("[data-selall]").onclick = e => {
+    const list = SEL[d];
+    const all = list.every(n => cfg.sel.includes(n));
+    for (const n of list){
+      const i = cfg.sel.indexOf(n);
+      if (all){ if (i >= 0) cfg.sel.splice(i, 1); } else if (i < 0) cfg.sel.push(n);
+    }
+    refresh();
+  };
+  g.appendChild(head); g.appendChild(chips);
+  groupsBox.appendChild(g);
+});
+
+/* ---------- build country chips ---------- */
+const wBox = document.getElementById("wChips");
+[...WORLD.f].sort((a, b) => (WORLD_BN[a.n] || a.n).localeCompare(WORLD_BN[b.n] || b.n, "bn"))
+ .forEach(f => {
+  const c = document.createElement("button");
+  c.className = "chip"; c.type = "button"; c.dataset.en = f.n; c.dataset.bn = WORLD_BN[f.n] || f.n;
+  c.innerHTML = `<span class="tick">✓</span>${c.dataset.bn}`;
+  c.onclick = () => {
+    const i = cfg.wsel.indexOf(f.n);
+    if (i >= 0) cfg.wsel.splice(i, 1); else cfg.wsel.push(f.n);
+    refresh();
+  };
+  wBox.appendChild(c);
+});
+
+/* ---------- search filters ---------- */
+function wireSearch(inputId, root){
+  document.getElementById(inputId).addEventListener("input", e => {
+    const q = e.target.value.trim().toLowerCase();
+    root.querySelectorAll(".chip").forEach(ch => {
+      const txt = ch.textContent.toLowerCase();
+      ch.classList.toggle("hidden", q && !txt.includes(q));
+    });
+    if (root === groupsBox){
+      root.querySelectorAll(".grp").forEach(g => {
+        const any = [...g.querySelectorAll(".chip")].some(c => !c.classList.contains("hidden"));
+        g.classList.toggle("hidden", !any);
+      });
+    }
+  });
+}
+wireSearch("bdSearch", groupsBox);
+wireSearch("wSearch", wBox);
+
+/* ---------- bulk actions ---------- */
+document.getElementById("bdAll").onclick = () => { cfg.sel = [...new Set([...cfg.sel, ...DATA.f.map(f => f.n)])]; refresh(); };
+document.getElementById("bdNone").onclick = () => { cfg.sel = []; refresh(); };
+document.getElementById("wAll").onclick = () => { cfg.wsel = WORLD.f.map(f => f.n); refresh(); };
+document.getElementById("wNone").onclick = () => { cfg.wsel = []; refresh(); };
+document.getElementById("demoBtn").onclick = () => { cfg.sel = [...DEMO]; refresh(); };
+document.getElementById("demoWBtn").onclick = () => { cfg.wsel = [...DEMO_W]; refresh(); };
+
+/* ---------- tabs ---------- */
+function setMode(m){
+  mode = m; cfg.mode = m; saveCfg();
+  document.getElementById("tabBd").classList.toggle("on", m === "bd");
+  document.getElementById("tabW").classList.toggle("on", m === "w");
+  document.getElementById("cardBd").classList.toggle("hidden", m !== "bd");
+  document.getElementById("cardW").classList.toggle("hidden", m === "bd");
+  refresh();
+}
+document.getElementById("tabBd").onclick = () => setMode("bd");
+document.getElementById("tabW").onclick = () => setMode("w");
+
+/* ---------- name / photo ---------- */
+const nameIn = document.getElementById("nameIn");
+nameIn.value = cfg.name || "";
+nameIn.oninput = () => { cfg.name = nameIn.value; refresh(); };
+document.getElementById("photoBtn").onclick = () => document.getElementById("photoIn").click();
+document.getElementById("photoIn").onchange = e => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    const S = 512;
+    const k = Math.min(S / img.width, S / img.height, 1);
+    const c2 = document.createElement("canvas");
+    c2.width = Math.round(img.width * k); c2.height = Math.round(img.height * k);
+    c2.getContext("2d").drawImage(img, 0, 0, c2.width, c2.height);
+    cfg.photo = c2.toDataURL("image/jpeg", .86);
+    applyPhoto(cfg.photo);
+    document.getElementById("thumb").src = cfg.photo;
+    saveCfg();
+    URL.revokeObjectURL(img.src);
+  };
+  img.src = URL.createObjectURL(file);
+};
+if (cfg.photo) document.getElementById("thumb").src = cfg.photo;
+
+document.getElementById("goBtn").onclick = () => { location.href = "video.html"; };
+
+/* boot */
+(async () => {
+  await MAP.fontsReady();
+  EN = makeEngines();
+  applyPhoto(cfg.photo || "");
+  setMode(mode);
+  window.__READY = 1;
+})();
+</script>
+</body>
+</html>
